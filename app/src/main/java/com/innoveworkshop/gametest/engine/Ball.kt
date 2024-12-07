@@ -51,4 +51,9 @@ class Ball(position: Vector, private val radius: Float) : GameObject(position) {
         }
         return false
     }
+
+    fun setVelocity(vx: Float, vy: Float) {
+        velocity.x = vx
+        velocity.y = vy
+    }
 }
