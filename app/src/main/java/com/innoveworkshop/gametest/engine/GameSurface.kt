@@ -3,6 +3,7 @@ package com.innoveworkshop.gametest.engine
 import android.content.Context
 import android.graphics.Canvas
 import android.util.AttributeSet
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import java.util.concurrent.CopyOnWriteArrayList
@@ -16,6 +17,7 @@ class GameSurface @JvmOverloads constructor(
     private val gameObjects = CopyOnWriteArrayList<GameObject>()
     private var gameThread: GameThread? = null
     private var root: GameObject? = null
+    private var isRunning: Boolean = true
 
     init {
         holder.addCallback(this)
@@ -36,22 +38,23 @@ class GameSurface @JvmOverloads constructor(
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
+        isRunning = true
         gameThread = GameThread(holder, this).apply {
             running = true
             start()
         }
     }
 
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        // Handle surface changes if needed
-    }
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        isRunning = false
         gameThread?.running = false
         gameThread?.join()
     }
 
     fun update() {
+        if (!isRunning) return
         root?.onFixedUpdate()
         for (gameObject in gameObjects) {
             gameObject.onFixedUpdate()
@@ -59,6 +62,7 @@ class GameSurface @JvmOverloads constructor(
     }
 
     override fun draw(canvas: Canvas) {
+        if (!isRunning) return
         super.draw(canvas)
         root?.onDraw(canvas)
         for (gameObject in gameObjects) {
@@ -66,10 +70,27 @@ class GameSurface @JvmOverloads constructor(
         }
     }
 
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!isRunning) return false
+        for (gameObject in gameObjects) {
+            if (gameObject is Ball) {
+                if (gameObject.handleTouch(event)) {
+                    return true
+                }
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    fun stopGame() {
+        isRunning = false
+    }
+
     private class GameThread(
         private val surfaceHolder: SurfaceHolder,
         private val gameSurface: GameSurface
     ) : Thread() {
+
         var running: Boolean = false
 
         override fun run() {

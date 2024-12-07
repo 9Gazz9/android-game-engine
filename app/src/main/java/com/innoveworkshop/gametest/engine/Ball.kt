@@ -3,6 +3,7 @@ package com.innoveworkshop.gametest.engine
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.view.MotionEvent
 
 class Ball(position: Vector, private val radius: Float) : GameObject(position) {
 
@@ -11,6 +12,8 @@ class Ball(position: Vector, private val radius: Float) : GameObject(position) {
         color = Color.RED
         style = Paint.Style.FILL
     }
+
+    var onClick: (() -> Unit)? = null
 
     override fun onFixedUpdate() {
         super.onFixedUpdate()
@@ -35,5 +38,17 @@ class Ball(position: Vector, private val radius: Float) : GameObject(position) {
 
     override fun onDraw(canvas: Canvas?) {
         canvas?.drawCircle(position.x, position.y, radius, paint)
+    }
+
+    fun handleTouch(event: MotionEvent): Boolean {
+        val dx = event.x - position.x
+        val dy = event.y - position.y
+        val distanceSquared = dx * dx + dy * dy
+
+        if (distanceSquared <= radius * radius) {
+            onClick?.invoke()
+            return true
+        }
+        return false
     }
 }
