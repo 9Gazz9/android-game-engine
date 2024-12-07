@@ -5,56 +5,25 @@ import android.graphics.Canvas
 import android.util.AttributeSet
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import java.util.Timer
-import java.util.TimerTask
+import java.util.concurrent.CopyOnWriteArrayList
 
 class GameSurface @JvmOverloads constructor(
     context: Context?,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : SurfaceView(context, attrs, defStyleAttr) {
-    private val holder: SurfaceHolder
-    private var timer: Timer? = null
+) : SurfaceView(context, attrs, defStyleAttr), SurfaceHolder.Callback {
+
+    private val gameObjects = CopyOnWriteArrayList<GameObject>()
+    private var gameThread: GameThread? = null
     private var root: GameObject? = null
 
-    // Create the GameObject list.
-    private val gameObjects = ArrayList<GameObject>()
-
     init {
-        // Ensure we are on top of everything.
-        setZOrderOnTop(true)
-
-        // Set up the SurfaceHolder event handler.
-        holder = getHolder()
-        holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                // Ensure we get the onDraw events.
-                setWillNotDraw(false)
-
-                // Start up the root object.
-                root!!.onStart(this@GameSurface)
-
-                // Set up the fixed update timer.
-                timer = Timer()
-                timer!!.scheduleAtFixedRate(FixedUpdateTimer(), 0, (1000 / 30).toLong())
-            }
-
-            override fun surfaceChanged(
-                holder: SurfaceHolder,
-                format: Int,
-                width: Int,
-                height: Int
-            ) {
-            }
-
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                // TODO: Stop everything.
-            }
-        })
+        holder.addCallback(this)
     }
 
     fun setRootGameObject(root: GameObject?) {
         this.root = root
+        root?.onStart(this)
     }
 
     fun addGameObject(gameObject: GameObject) {
@@ -66,23 +35,54 @@ class GameSurface @JvmOverloads constructor(
         return gameObjects.remove(gameObject)
     }
 
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        gameThread = GameThread(holder, this).apply {
+            running = true
+            start()
+        }
+    }
 
-        root!!.onDraw(canvas)
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        // Handle surface changes if needed
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        gameThread?.running = false
+        gameThread?.join()
+    }
+
+    fun update() {
+        root?.onFixedUpdate()
+        for (gameObject in gameObjects) {
+            gameObject.onFixedUpdate()
+        }
+    }
+
+    override fun draw(canvas: Canvas) {
+        super.draw(canvas)
+        root?.onDraw(canvas)
         for (gameObject in gameObjects) {
             gameObject.onDraw(canvas)
         }
     }
 
-    internal inner class FixedUpdateTimer : TimerTask() {
-        override fun run() {
-            for (gameObject in gameObjects) {
-                gameObject.onFixedUpdate()
-            }
+    private class GameThread(
+        private val surfaceHolder: SurfaceHolder,
+        private val gameSurface: GameSurface
+    ) : Thread() {
+        var running: Boolean = false
 
-            root!!.onFixedUpdate()
-            invalidate()
+        override fun run() {
+            while (running) {
+                val canvas: Canvas? = surfaceHolder.lockCanvas()
+                if (canvas != null) {
+                    synchronized(surfaceHolder) {
+                        gameSurface.update()
+                        gameSurface.draw(canvas)
+                    }
+                    surfaceHolder.unlockCanvasAndPost(canvas)
+                }
+            }
         }
     }
 }
